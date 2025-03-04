@@ -1,0 +1,4 @@
+(executable
+ (public_name hazel_of_ocaml)
+ (name main)
+ (libraries hazel_of_ocaml))

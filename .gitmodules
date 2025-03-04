@@ -1,0 +1,3 @@
+[submodule "vendor/hazel"]
+	path = vendor/hazel
+	url = https://github.com/hazelgrove/hazel
