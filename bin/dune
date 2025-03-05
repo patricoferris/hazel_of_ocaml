@@ -1,4 +1,6 @@
 (executable
+ (package hazel_of_ocaml)
  (public_name hazel_of_ocaml)
  (name main)
+ (modes native byte)
  (libraries hazel_of_ocaml))

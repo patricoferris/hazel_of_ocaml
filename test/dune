@@ -1,3 +1,6 @@
-(test
- (name test_hazel_of_ocaml)
- (libraries ppxlib))
+(library
+ (name test)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect))
+ (libraries ppxlib hazel_of_ocaml))

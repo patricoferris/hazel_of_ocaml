@@ -1,5 +1,5 @@
 (lang dune 3.16)
-
+(using mdx 0.4)
 (name hazel_of_ocaml)
 
 (generate_opam_files true)

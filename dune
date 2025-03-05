@@ -1,0 +1,4 @@
+(mdx
+ (files README.md)
+ (package hazel_of_ocaml)
+ (deps test.ml %{bin:hazel_of_ocaml}))

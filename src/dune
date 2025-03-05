@@ -1,3 +1,3 @@
 (library
  (name hazel_of_ocaml)
- (libraries ppxlib hazel.core))
+ (libraries ppxlib hazel.menhir))
