@@ -61,9 +61,10 @@ let%expect_test "sum definitions" =
   [%expect
     {|
     type t =
-    + A(Int)
-    + B(String)
-    + C(Int, String) in ?
+      + A(Int)
+      + B(String)
+      + C(Int, String)
+     in ?
     |}]
 
 let%expect_test "sum functions" =

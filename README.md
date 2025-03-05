@@ -13,9 +13,10 @@ let to_int = function
   | C (i, s) -> i + int_of_string s
 $ hazel_of_ocaml test.ml
 type t =
-+ A(Int)
-+ B(String)
-+ C(Int, String) in let to_int = fun x42 -> case x42
+  + A(Int)
+  + B(String)
+  + C(Int, String)
+ in let to_int = fun x42 -> case x42
   | A(i) => i
   | B(s) => int_of_string(s)
   | C(i, s) => i + int_of_string(s)

@@ -25,8 +25,8 @@ and typ ?(parens = true) : AST.typ pp =
         (Format.pp_print_list ~pp_sep:comma typ)
         cs
   | SumTyp s ->
-      Format.fprintf fmt "@.@[%a@]"
-        (Format.pp_print_list ~pp_sep:Format.pp_print_newline sumterm)
+      Format.fprintf fmt "@.@[<hov 2>  %a@]@."
+        (Format.pp_print_list ~pp_sep:Format.pp_force_newline sumterm)
         s
   | _ -> hole fmt
 
