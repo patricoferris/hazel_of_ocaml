@@ -25,6 +25,7 @@
    ; Our deps
    ppxlib
    merlin-lib
+   ppx_expect
    (mdx :with-test)
    ; Hazel deps which are vendored
    re
@@ -33,6 +34,7 @@
    ppx_let
    ppx_deriving_qcheck
    qcheck-alcotest
+   ppx_sexp_conv
  )
 )
 

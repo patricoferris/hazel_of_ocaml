@@ -13,6 +13,7 @@ depends: [
   "dune" {>= "3.16"}
   "ppxlib"
   "merlin-lib"
+  "ppx_expect"
   "mdx" {with-test}
   "re"
   "sexplib"
@@ -20,6 +21,7 @@ depends: [
   "ppx_let"
   "ppx_deriving_qcheck"
   "qcheck-alcotest"
+  "ppx_sexp_conv"
   "odoc" {with-doc}
 ]
 build: [
