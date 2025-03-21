@@ -4,6 +4,7 @@ type 'a pp = Format.formatter -> 'a -> unit
 
 let hole fmt = Format.fprintf fmt "?"
 let comma fmt () = Format.fprintf fmt ", "
+let is_arrow = function AST.ArrowType _ -> true | _ -> false
 
 let rec sumterm : AST.sumterm pp =
  fun fmt -> function
@@ -29,13 +30,26 @@ and typ ?(parens = true) : AST.typ pp =
         (Format.pp_print_list ~pp_sep:Format.pp_force_newline sumterm)
         s
   | ArrowType (t0, t1) ->
-      Format.fprintf fmt "%a -> %a" (typ ~parens:false) t0 (typ ~parens:false)
-        t1
+      let pp =
+        if parens then Format.fprintf fmt "(%a -> %a)"
+        else Format.fprintf fmt "%a -> %a"
+      in
+      pp (typ ~parens:(is_arrow t0)) t0 (typ ~parens:false) t1
+  | ArrayType elt -> Format.fprintf fmt "[%a]" (typ ~parens:false) elt
+  | UnknownType EmptyHole -> hole fmt
   | _ -> hole fmt
+
+let any s fmt _ = Format.fprintf fmt s
+let comma = any ", "
 
 let rec exp : AST.exp pp =
  fun fmt -> function
   | Int i -> Format.pp_print_int fmt i
+  | String s -> Format.fprintf fmt "\"%s\"" s
+  | Float f -> Format.pp_print_float fmt f
+  | Bool b -> Format.pp_print_bool fmt b
+  | ListExp es ->
+      Format.fprintf fmt "[%a]" Format.(pp_print_list ~pp_sep:comma exp) es
   | TyAlias (p, t, e) ->
       Format.fprintf fmt "type %a = %a in %a" tpat p (typ ~parens:true) t exp e
   | EmptyHole -> hole fmt
@@ -46,13 +60,16 @@ let rec exp : AST.exp pp =
   | Var v -> Format.pp_print_string fmt v
   | If (e1, e2, e3) ->
       Format.fprintf fmt "if %a then %a else %a" exp e1 exp e2 exp e3
-  | ApExp (f, args) -> Format.fprintf fmt "%a(%a)" exp f exp args
+  | ApExp (f, args) -> (
+      match (f, args) with
+      | ( AST.Constructor ("::", _),
+          AST.TupleExp [ hd; AST.Constructor ("[]", _) ] ) ->
+          Format.fprintf fmt "[%a]" exp hd
+      | AST.Constructor ("::", _), AST.TupleExp [ hd; next ] ->
+          Format.fprintf fmt "%a :: %a" exp hd exp next
+      | _ -> Format.fprintf fmt "%a(%a)" exp f exp args)
   | TupleExp exps ->
-      Format.fprintf fmt "(%a)"
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt _ -> Format.fprintf fmt ", ")
-           exp)
-        exps
+      Format.fprintf fmt "(%a)" (Format.pp_print_list ~pp_sep:comma exp) exps
   | BinExp (x, op, y) ->
       let bin_op =
         match op with
@@ -74,10 +91,12 @@ let rec exp : AST.exp pp =
       Format.fprintf fmt "case %a @.@[<hov 2>  %a@]@.end" exp e
         (Format.pp_print_list ~pp_sep:Format.pp_force_newline case)
         cases
+  | Constructor (c, _) -> Format.fprintf fmt "%s" c
   | _ -> hole fmt
 
 and case : (AST.pat * AST.exp) pp =
- fun fmt (p, e) -> Format.fprintf fmt "| %a => %a" (pat ~parens:true) p exp e
+ fun fmt (p, e) ->
+  Format.fprintf fmt "| @[<2>%a@;=>@;%a@]" (pat ~parens:true) p exp e
 
 and tpat : AST.tpat pp =
  fun fmt -> function VarTPat v -> Format.pp_print_string fmt v | _ -> hole fmt
@@ -90,6 +109,7 @@ and pat ?(parens = true) : AST.pat pp =
   | ConstructorPat (c, UnknownType Internal) -> Format.fprintf fmt "%s" c
   | ApPat (f, arg) -> Format.fprintf fmt "%a(%a)" patt f (pat ~parens:false) arg
   | IntPat i -> Format.pp_print_int fmt i
+  | ConsPat (hd, ConstructorPat ("[]", _)) -> Format.fprintf fmt "[%a]" patt hd
   | ConsPat (hd, tl) -> Format.fprintf fmt "%a :: %a" patt hd patt tl
   | WildPat -> Format.fprintf fmt "_"
   | TuplePat pats ->

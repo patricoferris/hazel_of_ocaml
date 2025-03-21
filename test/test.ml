@@ -44,7 +44,7 @@ let%expect_test "list.hd" =
     {|
     let hd = fun v -> case v
       | hd :: _ => hd
-      | [] => invalid_arg(?)
+      | [] => invalid_arg("empty list")
     end in ?
     |}]
 
@@ -55,7 +55,7 @@ let%expect_test "list.hd function" =
     {|
     let hd = fun x1 -> case x1
       | hd :: _ => hd
-      | [] => invalid_arg(?)
+      | [] => invalid_arg("empty list")
     end in ?
     |}]
 
@@ -85,5 +85,39 @@ let%expect_test "sum functions" =
       | A(1) => 0
       | A(i) => i
       | B => 10
+    end in ?
+    |}]
+
+let%expect_test "lists" =
+  ocaml_to_hazel ~typecheck:true
+    {| let hd = function | x :: _ -> x | [] -> invalid_arg "Empty list" |};
+  [%expect
+    {|
+    let hd : [?] -> ? = fun x3 -> case x3
+      | x :: _ => x
+      | [] => invalid_arg("Empty list")
+    end in ?
+    |}]
+
+let%expect_test "another list" =
+  ocaml_to_hazel ~typecheck:true
+    {|
+let[@tail_mod_cons] rec mapi i f = function
+  | [] -> []
+  | [ a1 ] ->
+      let r1 = f i a1 in
+      [ r1 ]
+  | a1 :: a2 :: l ->
+      let r1 = f i a1 in
+      let r2 = f (i + 1) a2 in
+      r1 :: r2 :: mapi (i + 2) f l
+|};
+  [%expect
+    {|
+    let mapi : Int -> (Int -> ? -> ?) -> [?] -> [?] = fun i -> fun f -> fun x4 -> case x4
+      | [] => []
+      | [a1] => let r1 = f(i)(a1) in [r1]
+      | a1 :: a2 :: l =>
+          let r1 = f(i)(a1) in let r2 = f(i + 1)(a2) in r1 :: r2 :: mapi(i + 2)(f)(l)
     end in ?
     |}]

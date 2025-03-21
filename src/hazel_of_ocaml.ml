@@ -100,13 +100,19 @@ let rec of_expression (e : expression) : AST.exp =
       | AST.Var "=", [ x; y ] -> AST.BinExp (x, IntOp Equals, y)
       | AST.Var "<>", [ x; y ] -> AST.BinExp (x, IntOp NotEquals, y)
       | _ ->
-          let args =
-            match args with
-            | [] -> failwith "No arguments!"
-            | [ x ] -> x
-            | args -> AST.TupleExp args
-          in
-          AST.ApExp (func, args))
+          List.fold_right (fun acc f -> AST.ApExp (f, acc)) (List.rev args) func
+      )
+  | Pexp_construct (l, None) ->
+      let construct_name = longident l in
+      AST.Constructor (construct_name, AST.UnknownType EmptyHole)
+  | Pexp_construct (l, Some e) ->
+      let construct_name = longident l in
+      let arg = of_expression e in
+      let f = AST.Constructor (construct_name, AST.UnknownType EmptyHole) in
+      AST.ApExp (f, arg)
+  | Pexp_let (_rec, bindings, body) ->
+      of_value_bindings bindings (of_expression body)
+  | Pexp_tuple exps -> AST.TupleExp (List.map of_expression exps)
   | _ -> EmptyHole
 
 and of_pattern (p : pattern) : AST.pat =
@@ -131,7 +137,38 @@ and of_pattern (p : pattern) : AST.pat =
 and of_cases (cs : case list) : (AST.pat * AST.exp) list =
   List.map (fun (c : case) -> (of_pattern c.pc_lhs, of_expression c.pc_rhs)) cs
 
-let rec arrow_type a b =
+and of_value_bindings ?types bindings acc =
+  let binding (v : value_binding) =
+   fun exp ->
+    let type' =
+      match types with
+      | None -> None
+      | Some types -> (
+          try
+            match v.pvb_pat.ppat_desc with
+            | Ppat_var { txt; _ } ->
+                let t =
+                  Typecheck.find_function_type
+                    (Ocaml_typing.Ident.create_local txt)
+                    types
+                in
+                let t' = of_type_expr t in
+                Some t'
+            | _ -> None
+          with
+          | Not_found -> None
+          | Invalid_argument _ -> None)
+    in
+    let pattern =
+      match type' with
+      | Some ty -> AST.CastPat (of_pattern v.pvb_pat, ty, UnknownType Internal)
+      | None -> of_pattern v.pvb_pat
+    in
+    AST.Let (pattern, of_expression v.pvb_expr, exp)
+  in
+  List.fold_left (fun v b -> (binding b) v) acc bindings
+
+and arrow_type a b =
   let open Ocaml_typing.Types in
   let a' = of_type_expr a in
   match get_desc b with
@@ -150,45 +187,16 @@ and of_type_expr (v : Ocaml_typing.Types.type_expr) =
       | "float" -> AST.FloatType
       | "bool" -> AST.BoolType
       | p -> AST.TypVar p)
-  | _ ->
-      Ocaml_typing.Printtyp.type_expr Format.std_formatter v;
-      assert false
+  | Tconstr (p, [ x ], _) -> (
+      match Ocaml_typing.Path.name p with
+      | "list" -> AST.ArrayType (of_type_expr x)
+      | f -> invalid_arg ("Hazel doesn't have type constructors for " ^ f))
+  | _ -> AST.UnknownType EmptyHole
 
 let of_structure_item ?types (str : structure_item) =
   match str.pstr_desc with
   | Pstr_type (_, tds) ->
       let terms = List.map of_type_declaration tds in
       fun exp -> List.fold_left (fun e f -> f e) exp terms
-  | Pstr_value (_, bindings) ->
-      let binding (v : value_binding) =
-       fun exp ->
-        let type' =
-          match types with
-          | None -> None
-          | Some types -> (
-              try
-                match v.pvb_pat.ppat_desc with
-                | Ppat_var { txt; _ } ->
-                    let t =
-                      Typecheck.find_function_type
-                        (Ocaml_typing.Ident.create_local txt)
-                        types
-                    in
-                    let t' = of_type_expr t in
-                    Some t'
-                | _ -> None
-              with
-              | Not_found -> None
-              | Invalid_argument _ -> None)
-        in
-        let pattern =
-          match type' with
-          | Some ty ->
-              AST.CastPat (of_pattern v.pvb_pat, ty, UnknownType Internal)
-          | None -> of_pattern v.pvb_pat
-        in
-        AST.Let (pattern, of_expression v.pvb_expr, exp)
-      in
-      let f acc = List.fold_left (fun v b -> (binding b) v) acc bindings in
-      fun exp -> f exp
+  | Pstr_value (_, bindings) -> fun exp -> of_value_bindings ?types bindings exp
   | _ -> invalid_arg "Unsupported structure item"
