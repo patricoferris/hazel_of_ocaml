@@ -28,6 +28,9 @@ and typ ?(parens = true) : AST.typ pp =
       Format.fprintf fmt "@.@[<hov 2>  %a@]@."
         (Format.pp_print_list ~pp_sep:Format.pp_force_newline sumterm)
         s
+  | ArrowType (t0, t1) ->
+      Format.fprintf fmt "%a -> %a" (typ ~parens:false) t0 (typ ~parens:false)
+        t1
   | _ -> hole fmt
 
 let rec exp : AST.exp pp =
@@ -94,4 +97,6 @@ and pat ?(parens = true) : AST.pat pp =
         (if parens then "(%a)" else "%a")
         Format.(pp_print_list ~pp_sep:comma pat)
         pats
+  | CastPat (p, t, _) ->
+      Format.fprintf fmt "%a : %a" (pat ~parens:false) p (typ ~parens:false) t
   | _ -> hole fmt

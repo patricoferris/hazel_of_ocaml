@@ -12,11 +12,14 @@ depends: [
   "ocaml"
   "dune" {>= "3.16"}
   "ppxlib"
+  "merlin-lib"
+  "mdx" {with-test}
   "re"
   "sexplib"
   "unionFind"
   "ppx_let"
   "ppx_deriving_qcheck"
+  "qcheck-alcotest"
   "odoc" {with-doc}
 ]
 build: [

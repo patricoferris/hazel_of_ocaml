@@ -24,12 +24,15 @@
    dune
    ; Our deps
    ppxlib
+   merlin-lib
+   (mdx :with-test)
    ; Hazel deps which are vendored
    re
    sexplib
    unionFind
    ppx_let
    ppx_deriving_qcheck
+   qcheck-alcotest
  )
 )
 

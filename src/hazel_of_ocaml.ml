@@ -1,6 +1,7 @@
 open Ppxlib
 open Haz3lmenhir
 module Ppast = Ppast
+module Typecheck = Typecheck
 
 let rec of_core_type (c : core_type) : AST.typ =
   match c.ptyp_desc with
@@ -130,15 +131,64 @@ and of_pattern (p : pattern) : AST.pat =
 and of_cases (cs : case list) : (AST.pat * AST.exp) list =
   List.map (fun (c : case) -> (of_pattern c.pc_lhs, of_expression c.pc_rhs)) cs
 
-let of_structure_item (str : structure_item) =
+let rec arrow_type a b =
+  let open Ocaml_typing.Types in
+  let a' = of_type_expr a in
+  match get_desc b with
+  | Tarrow (_, t0, t1, _) -> AST.ArrowType (a', arrow_type t0 t1)
+  | _ -> AST.ArrowType (a', of_type_expr b)
+
+and of_type_expr (v : Ocaml_typing.Types.type_expr) =
+  let open Ocaml_typing.Types in
+  match get_desc v with
+  | Tarrow (_, t0, t1, _) -> arrow_type t0 t1
+  | Tvar (Some s) -> AST.TypVar s
+  | Tconstr (p, [], _) -> (
+      match Ocaml_typing.Path.name p with
+      | "int" -> AST.IntType
+      | "string" -> AST.StringType
+      | "float" -> AST.FloatType
+      | "bool" -> AST.BoolType
+      | p -> AST.TypVar p)
+  | _ ->
+      Ocaml_typing.Printtyp.type_expr Format.std_formatter v;
+      assert false
+
+let of_structure_item ?types (str : structure_item) =
   match str.pstr_desc with
   | Pstr_type (_, tds) ->
       let terms = List.map of_type_declaration tds in
       fun exp -> List.fold_left (fun e f -> f e) exp terms
   | Pstr_value (_, bindings) ->
       let binding (v : value_binding) =
-       fun exp -> AST.Let (of_pattern v.pvb_pat, of_expression v.pvb_expr, exp)
+       fun exp ->
+        let type' =
+          match types with
+          | None -> None
+          | Some types -> (
+              try
+                match v.pvb_pat.ppat_desc with
+                | Ppat_var { txt; _ } ->
+                    let t =
+                      Typecheck.find_function_type
+                        (Ocaml_typing.Ident.create_local txt)
+                        types
+                    in
+                    let t' = of_type_expr t in
+                    Some t'
+                | _ -> None
+              with
+              | Not_found -> None
+              | Invalid_argument _ -> None)
+        in
+        let pattern =
+          match type' with
+          | Some ty ->
+              AST.CastPat (of_pattern v.pvb_pat, ty, UnknownType Internal)
+          | None -> of_pattern v.pvb_pat
+        in
+        AST.Let (pattern, of_expression v.pvb_expr, exp)
       in
       let f acc = List.fold_left (fun v b -> (binding b) v) acc bindings in
       fun exp -> f exp
-  | _ -> invalid_arg "TODO"
+  | _ -> invalid_arg "Unsupported structure item"

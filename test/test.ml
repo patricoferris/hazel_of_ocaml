@@ -8,9 +8,12 @@ let read_ast s =
   | Ok _ -> invalid_arg "Wanted an implementation file"
   | Error (e, _) -> Ppxlib.Location.Error.raise e
 
-let ocaml_to_hazel s =
+let ocaml_to_hazel ?(typecheck = false) s =
   let ast = read_ast s in
-  let terms = List.map Hazel_of_ocaml.of_structure_item ast in
+  let types =
+    if typecheck then Some (Hazel_of_ocaml.Typecheck.typecheck s) else None
+  in
+  let terms = List.map (Hazel_of_ocaml.of_structure_item ?types) ast in
   let terms =
     List.fold_right (fun f exp -> f exp) terms Haz3lmenhir.AST.EmptyHole
   in
@@ -68,10 +71,17 @@ let%expect_test "sum definitions" =
     |}]
 
 let%expect_test "sum functions" =
-  ocaml_to_hazel {|let f = function A 1 -> 0 | A i -> i | B -> 10 |};
+  ocaml_to_hazel ~typecheck:true
+    {|
+  type t = A of int | B of string | C of int * string
+  let f = function A 1 -> 0 | A i -> i | B -> 10 |};
   [%expect
     {|
-    let f = fun x2 -> case x2
+    type t =
+      + A(Int)
+      + B(String)
+      + C(Int, String)
+     in let f : t -> Int = fun x2 -> case x2
       | A(1) => 0
       | A(i) => i
       | B => 10
