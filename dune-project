@@ -31,6 +31,7 @@
    re
    sexplib
    unionFind
+   menhir
    ppx_let
    ppx_deriving_qcheck
    qcheck-alcotest
