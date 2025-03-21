@@ -57,31 +57,27 @@ let longident l =
   | [ x ] -> x
   | _ -> failwith "Hazel doesn't have a module system"
 
+let fresh_var =
+  let i = ref 0 in
+  fun () ->
+    i := !i + 1;
+    "x" ^ string_of_int !i
+
 let rec of_expression (e : expression) : AST.exp =
   match e.pexp_desc with
   | Pexp_constant constant -> of_constant constant
-  | Pexp_function (params, _constraint, body) ->
-      let only_vals =
-        List.filter_map
-          (function
-            | { pparam_desc = Pparam_val (label, _, pat); _ } ->
-                Some
-                  ( of_pattern pat,
-                    match label with
-                    | Nolabel -> None
-                    | Labelled v -> Some v
-                    | _ -> failwith "Optional labels not supported" )
-            | _ -> failwith "Unsupported")
-          params
+  | Pexp_fun (lbl, _exp, pat, body) ->
+      let label =
+        match lbl with
+        | Nolabel -> None
+        | Labelled v -> Some v
+        | Optional _ -> None
       in
-      let body =
-        match body with
-        | Pfunction_body b -> of_expression b
-        | Pfunction_cases (cs, _, _) ->
-            let cases = of_cases cs in
-            AST.Fun (AST.VarPat "x42", AST.CaseExp (AST.Var "x42", cases), None)
-      in
-      List.fold_left (fun acc (p, lbl) -> AST.Fun (p, acc, lbl)) body only_vals
+      AST.Fun (of_pattern pat, of_expression body, label)
+  | Pexp_function cases ->
+      let hazel_cases = of_cases cases in
+      let var = fresh_var () in
+      AST.Fun (AST.VarPat var, AST.CaseExp (AST.Var var, hazel_cases), None)
   | Pexp_ident l -> AST.Var (longident l)
   | Pexp_ifthenelse (e1, e2, Some e3) ->
       AST.If (of_expression e1, of_expression e2, of_expression e3)

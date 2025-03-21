@@ -17,10 +17,20 @@
 
 (package
  (name hazel_of_ocaml)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml dune)
- (tags
-  (topics "to describe" your project)))
+ (synopsis "Hazel code from OCaml code")
+ (description "A best-effort transpiler of OCaml code to Hazel code")
+ (depends 
+   ocaml
+   dune
+   ; Our deps
+   ppxlib
+   ; Hazel deps which are vendored
+   re
+   sexplib
+   unionFind
+   ppx_let
+   ppx_deriving_qcheck
+ )
+)
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

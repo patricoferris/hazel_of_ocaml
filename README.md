@@ -16,7 +16,7 @@ type t =
   + A(Int)
   + B(String)
   + C(Int, String)
- in let to_int = fun x42 -> case x42
+ in let to_int = fun x1 -> case x1
   | A(i) => i
   | B(s) => int_of_string(s)
   | C(i, s) => i + int_of_string(s)

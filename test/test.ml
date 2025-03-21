@@ -50,7 +50,7 @@ let%expect_test "list.hd function" =
     {|let hd = function | hd :: _ -> hd | [] -> invalid_arg "empty list" |};
   [%expect
     {|
-    let hd = fun x42 -> case x42
+    let hd = fun x1 -> case x1
       | hd :: _ => hd
       | [] => invalid_arg(?)
     end in ?
@@ -71,7 +71,7 @@ let%expect_test "sum functions" =
   ocaml_to_hazel {|let f = function A 1 -> 0 | A i -> i | B -> 10 |};
   [%expect
     {|
-    let f = fun x42 -> case x42
+    let f = fun x2 -> case x2
       | A(1) => 0
       | A(i) => i
       | B => 10
