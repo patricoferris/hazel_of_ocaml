@@ -23,7 +23,7 @@
    ocaml
    dune
    ; Our deps
-   ppxlib
+   (ppxlib (<= 0.35.0))
    merlin-lib
    ppx_expect
    (mdx :with-test)
@@ -31,6 +31,7 @@
    re
    sexplib
    unionFind
+   reason
    menhir
    ppx_let
    ppx_deriving_qcheck
