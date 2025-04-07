@@ -58,62 +58,87 @@ let longident l =
   | [ x ] -> x
   | _ -> failwith "Hazel doesn't have a module system"
 
+let poly_vars v =
+  let open Ocaml_typing.Outcometree in
+  let rec loop = function
+    | Otyp_var (_, v) -> [ v ]
+    | Otyp_arrow (_, a, b) -> loop b @ loop a
+    | _ -> []
+  in
+  loop v
+
 let fresh_var =
   let i = ref 0 in
   fun () ->
     i := !i + 1;
     "x" ^ string_of_int !i
 
-let rec of_expression (e : expression) : AST.exp =
-  match e.pexp_desc with
-  | Pexp_constant constant -> of_constant constant
-  | Pexp_fun (lbl, _exp, pat, body) ->
-      let label =
-        match lbl with
-        | Nolabel -> None
-        | Labelled v -> Some v
-        | Optional _ -> None
-      in
-      AST.Fun (of_pattern pat, of_expression body, label)
-  | Pexp_function cases ->
-      let hazel_cases = of_cases cases in
-      let var = fresh_var () in
-      AST.Fun (AST.VarPat var, AST.CaseExp (AST.Var var, hazel_cases), None)
-  | Pexp_ident l -> AST.Var (longident l)
-  | Pexp_ifthenelse (e1, e2, Some e3) ->
-      AST.If (of_expression e1, of_expression e2, of_expression e3)
-  | Pexp_match (exp, cases) -> AST.CaseExp (of_expression exp, of_cases cases)
-  | Pexp_apply (e, args) -> (
-      let func = of_expression e in
-      let args = List.map snd args |> List.map of_expression in
-      match (func, args) with
-      | AST.Var "+", [ x; y ] -> AST.BinExp (x, IntOp Plus, y)
-      | AST.Var "-", [ x; y ] -> AST.BinExp (x, IntOp Minus, y)
-      (* Tricky: we don't have type information *)
-      | AST.Var "<=", [ x; y ] -> AST.BinExp (x, IntOp LessThanOrEqual, y)
-      | AST.Var "<", [ x; y ] -> AST.BinExp (x, IntOp LessThan, y)
-      | AST.Var ">", [ x; y ] -> AST.BinExp (x, IntOp GreaterThan, y)
-      | AST.Var ">=", [ x; y ] -> AST.BinExp (x, IntOp GreaterThanOrEqual, y)
-      | AST.Var "*", [ x; y ] -> AST.BinExp (x, IntOp Times, y)
-      | AST.Var "/", [ x; y ] -> AST.BinExp (x, IntOp Divide, y)
-      | AST.Var "**", [ x; y ] -> AST.BinExp (x, IntOp Power, y)
-      | AST.Var "=", [ x; y ] -> AST.BinExp (x, IntOp Equals, y)
-      | AST.Var "<>", [ x; y ] -> AST.BinExp (x, IntOp NotEquals, y)
-      | _ ->
-          List.fold_right (fun acc f -> AST.ApExp (f, acc)) (List.rev args) func
-      )
-  | Pexp_construct (l, None) ->
-      let construct_name = longident l in
-      AST.Constructor (construct_name, AST.UnknownType EmptyHole)
-  | Pexp_construct (l, Some e) ->
-      let construct_name = longident l in
-      let arg = of_expression e in
-      let f = AST.Constructor (construct_name, AST.UnknownType EmptyHole) in
-      AST.ApExp (f, arg)
-  | Pexp_let (_rec, bindings, body) ->
-      of_value_bindings bindings (of_expression body)
-  | Pexp_tuple exps -> AST.TupleExp (List.map of_expression exps)
-  | _ -> EmptyHole
+let rec of_expression ?(polyvars = []) (e : expression) : AST.exp =
+  let f =
+    match e.pexp_desc with
+    | Pexp_constant constant -> of_constant constant
+    | Pexp_fun (lbl, _exp, pat, body) ->
+        let label =
+          match lbl with
+          | Nolabel -> None
+          | Labelled v -> Some v
+          | Optional _ -> None
+        in
+        AST.Fun (of_pattern pat, of_expression body, label)
+    | Pexp_function cases ->
+        let hazel_cases = of_cases cases in
+        let var = fresh_var () in
+        AST.Fun (AST.VarPat var, AST.CaseExp (AST.Var var, hazel_cases), None)
+    | Pexp_ident l -> AST.Var (longident l)
+    | Pexp_ifthenelse (e1, e2, Some e3) ->
+        AST.If (of_expression e1, of_expression e2, of_expression e3)
+    | Pexp_match (exp, cases) -> AST.CaseExp (of_expression exp, of_cases cases)
+    | Pexp_apply (e, args) -> (
+        let func = of_expression e in
+        let args = List.map snd args |> List.map of_expression in
+        match (func, args) with
+        | AST.Var "+", [ x; y ] -> AST.BinExp (x, IntOp Plus, y)
+        | AST.Var "-", [ x; y ] -> AST.BinExp (x, IntOp Minus, y)
+        (* Tricky: we don't have type information *)
+        | AST.Var "<=", [ x; y ] -> AST.BinExp (x, IntOp LessThanOrEqual, y)
+        | AST.Var "<", [ x; y ] -> AST.BinExp (x, IntOp LessThan, y)
+        | AST.Var ">", [ x; y ] -> AST.BinExp (x, IntOp GreaterThan, y)
+        | AST.Var ">=", [ x; y ] -> AST.BinExp (x, IntOp GreaterThanOrEqual, y)
+        | AST.Var "*", [ x; y ] -> AST.BinExp (x, IntOp Times, y)
+        | AST.Var "/", [ x; y ] -> AST.BinExp (x, IntOp Divide, y)
+        | AST.Var "**", [ x; y ] -> AST.BinExp (x, IntOp Power, y)
+        | AST.Var "=", [ x; y ] -> AST.BinExp (x, IntOp Equals, y)
+        | AST.Var "<>", [ x; y ] -> AST.BinExp (x, IntOp NotEquals, y)
+        | _ ->
+            (* Trying our best with type application *)
+            let func =
+              match polyvars with
+              | [] -> func
+              | polyvars ->
+                  List.fold_left
+                    (fun acc v -> AST.TypAp (acc, AST.TypVar v))
+                    func polyvars
+            in
+            List.fold_right
+              (fun acc f -> AST.ApExp (f, acc))
+              (List.rev args) func)
+    | Pexp_construct (l, None) ->
+        let construct_name = longident l in
+        AST.Constructor (construct_name, AST.UnknownType EmptyHole)
+    | Pexp_construct (l, Some e) ->
+        let construct_name = longident l in
+        let arg = of_expression e in
+        let f = AST.Constructor (construct_name, AST.UnknownType EmptyHole) in
+        AST.ApExp (f, arg)
+    | Pexp_let (_rec, bindings, body) ->
+        of_value_bindings bindings (of_expression body)
+    | Pexp_tuple exps -> AST.TupleExp (List.map of_expression exps)
+    | _ -> EmptyHole
+  in
+  match polyvars with
+  | [] -> f
+  | vars ->
+      List.fold_left (fun acc var -> AST.TypFun (AST.VarTPat var, acc)) f vars
 
 and of_pattern (p : pattern) : AST.pat =
   match p.ppat_desc with
@@ -146,14 +171,24 @@ and of_value_bindings ?types bindings acc =
       | Some types -> (
           try
             match v.pvb_pat.ppat_desc with
-            | Ppat_var { txt; _ } ->
+            | Ppat_var { txt; _ } -> (
                 let t =
                   Typecheck.find_function_type
                     (Ocaml_typing.Ident.create_local txt)
                     types
                 in
-                let t' = of_type_expr t in
-                Some t'
+                Ocaml_typing.Printtyp.reset ();
+                let outcome = Ocaml_typing.Printtyp.tree_of_type_scheme t in
+                let t' = of_out_type outcome in
+                let vars = poly_vars outcome in
+                match vars with
+                | [] -> Some ([], t')
+                | vars ->
+                    Some
+                      ( vars,
+                        List.fold_left
+                          (fun t var -> AST.ForallType (AST.VarTPat var, t))
+                          t' vars ))
             | _ -> None
           with
           | Not_found -> None
@@ -161,35 +196,37 @@ and of_value_bindings ?types bindings acc =
     in
     let pattern =
       match type' with
-      | Some ty -> AST.CastPat (of_pattern v.pvb_pat, ty, UnknownType Internal)
+      | Some (_, ty) ->
+          AST.CastPat (of_pattern v.pvb_pat, ty, UnknownType Internal)
       | None -> of_pattern v.pvb_pat
     in
-    AST.Let (pattern, of_expression v.pvb_expr, exp)
+    let polyvars = Option.map fst type' |> Option.value ~default:[] in
+    AST.Let (pattern, of_expression ~polyvars v.pvb_expr, exp)
   in
   List.fold_left (fun v b -> (binding b) v) acc bindings
 
 and arrow_type a b =
-  let open Ocaml_typing.Types in
-  let a' = of_type_expr a in
-  match get_desc b with
-  | Tarrow (_, t0, t1, _) -> AST.ArrowType (a', arrow_type t0 t1)
-  | _ -> AST.ArrowType (a', of_type_expr b)
+  let open Ocaml_typing.Outcometree in
+  let a' = of_out_type a in
+  match b with
+  | Otyp_arrow (_, t0, t1) -> AST.ArrowType (a', arrow_type t0 t1)
+  | _ -> AST.ArrowType (a', of_out_type b)
 
-and of_type_expr (v : Ocaml_typing.Types.type_expr) =
-  let open Ocaml_typing.Types in
-  match get_desc v with
-  | Tarrow (_, t0, t1, _) -> arrow_type t0 t1
-  | Tvar (Some s) -> AST.TypVar s
-  | Tconstr (p, [], _) -> (
-      match Ocaml_typing.Path.name p with
-      | "int" -> AST.IntType
-      | "string" -> AST.StringType
-      | "float" -> AST.FloatType
-      | "bool" -> AST.BoolType
-      | p -> AST.TypVar p)
-  | Tconstr (p, [ x ], _) -> (
-      match Ocaml_typing.Path.name p with
-      | "list" -> AST.ArrayType (of_type_expr x)
+and of_out_type (v : Ocaml_typing.Outcometree.out_type) : AST.typ =
+  match v with
+  | Otyp_arrow (_, t0, t1) -> arrow_type t0 t1
+  | Otyp_var (_, s) -> AST.TypVar s
+  | Otyp_constr (p, []) -> (
+      match p with
+      | Oide_ident { printed_name = "int" } -> AST.IntType
+      | Oide_ident { printed_name = "string" } -> AST.StringType
+      | Oide_ident { printed_name = "float" } -> AST.FloatType
+      | Oide_ident { printed_name = "bool" } -> AST.BoolType
+      | Oide_ident { printed_name = p } -> AST.TypVar p
+      | _ -> failwith "Modules not supported by hazel")
+  | Otyp_constr (p, [ x ]) -> (
+      match Fmt.str "%a" !Ocaml_typing.Oprint.out_ident p with
+      | "list" -> AST.ArrayType (of_out_type x)
       | f -> invalid_arg ("Hazel doesn't have type constructors for " ^ f))
   | _ -> AST.UnknownType EmptyHole
 

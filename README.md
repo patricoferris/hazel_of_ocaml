@@ -37,3 +37,18 @@ type t =
   | C(i, s) => i + int_of_string(s)
 end in ?
 ```
+
+This even goes as far as trying to add explicit polymorphic type annotations to your Hazel code.
+
+```sh
+$ cat <<EOF >> map.ml \
+> let rec map f = function\
+>   | [] -> []\
+>   | x :: xs -> (f x) :: map f xs\
+> EOF
+$ hazel_of_ocaml -type map.ml
+let map : forall a -> forall b -> (a -> b) -> [a] -> [b] = typfun a -> typfun b -> fun f -> fun x1 -> case x1
+  | [] => []
+  | x :: xs => f(x) :: map(f)(xs)
+end in ?
+```

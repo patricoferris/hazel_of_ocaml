@@ -35,6 +35,8 @@ and typ ?(parens = true) : AST.typ pp =
         else Format.fprintf fmt "%a -> %a"
       in
       pp (typ ~parens:(is_arrow t0)) t0 (typ ~parens:false) t1
+  | ForallType (AST.VarTPat v, t) ->
+      Format.fprintf fmt "forall %s -> %a" v (typ ~parens:false) t
   | ArrayType elt -> Format.fprintf fmt "[%a]" (typ ~parens:false) elt
   | UnknownType EmptyHole -> hole fmt
   | _ -> hole fmt
@@ -57,6 +59,7 @@ let rec exp : AST.exp pp =
       Format.fprintf fmt "let %a = %a in %a" (pat ~parens:true) p exp e1 exp e2
   | Fun (p, e, _) ->
       Format.fprintf fmt "fun %a -> %a" (pat ~parens:true) p exp e
+  | TypFun (VarTPat v, e) -> Format.fprintf fmt "typfun %s -> %a" v exp e
   | Var v -> Format.pp_print_string fmt v
   | If (e1, e2, e3) ->
       Format.fprintf fmt "if %a then %a else %a" exp e1 exp e2 exp e3
@@ -92,6 +95,7 @@ let rec exp : AST.exp pp =
         (Format.pp_print_list ~pp_sep:Format.pp_force_newline case)
         cases
   | Constructor (c, _) -> Format.fprintf fmt "%s" c
+  | TypAp (f, t) -> Format.fprintf fmt "%a\\@<%a>" exp f (typ ~parens:false) t
   | _ -> hole fmt
 
 and case : (AST.pat * AST.exp) pp =

@@ -93,7 +93,7 @@ let%expect_test "lists" =
     {| let hd = function | x :: _ -> x | [] -> invalid_arg "Empty list" |};
   [%expect
     {|
-    let hd : [?] -> ? = fun x3 -> case x3
+    let hd : forall a -> [a] -> a = typfun a -> fun x3 -> case x3
       | x :: _ => x
       | [] => invalid_arg("Empty list")
     end in ?
@@ -114,7 +114,7 @@ let[@tail_mod_cons] rec mapi i f = function
 |};
   [%expect
     {|
-    let mapi : Int -> (Int -> ? -> ?) -> [?] -> [?] = fun i -> fun f -> fun x4 -> case x4
+    let mapi : forall a -> forall b -> Int -> (Int -> a -> b) -> [a] -> [b] = typfun a -> typfun b -> fun i -> fun f -> fun x4 -> case x4
       | [] => []
       | [a1] => let r1 = f(i)(a1) in [r1]
       | a1 :: a2 :: l =>
