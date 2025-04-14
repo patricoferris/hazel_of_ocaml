@@ -95,7 +95,7 @@ let rec exp : AST.exp pp =
         (Format.pp_print_list ~pp_sep:Format.pp_force_newline case)
         cases
   | Constructor (c, _) -> Format.fprintf fmt "%s" c
-  | TypAp (f, t) -> Format.fprintf fmt "%a\\@<%a>" exp f (typ ~parens:false) t
+  | TypAp (f, t) -> Format.fprintf fmt "%a@<%a>" exp f (typ ~parens:false) t
   | _ -> hole fmt
 
 and case : (AST.pat * AST.exp) pp =

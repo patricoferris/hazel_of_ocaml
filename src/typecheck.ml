@@ -14,7 +14,10 @@ let find_function_type name (sign : Ocaml_typing.Types.signature) =
   | Some v -> (
       match get_desc v.val_type with
       | Tarrow _ -> v.val_type
-      | _ -> invalid_arg (Ocaml_typing.Ident.name name ^ " is not a function"))
+      | _ ->
+          Fmt.invalid_arg "Not a function: %a"
+            (Ocaml_typing.Printtyp.value_description name)
+            v)
 
 let typecheck expr =
   Mocaml.with_state (Mocaml.new_state ()) @@ fun () ->

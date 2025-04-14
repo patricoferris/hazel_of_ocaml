@@ -46,8 +46,11 @@ $ cat <<EOF >> map.ml \
 >   | [] -> []\
 >   | x :: xs -> (f x) :: map f xs\
 > EOF
-$ hazel_of_ocaml -type map.ml
-let map : forall a -> forall b -> (a -> b) -> [a] -> [b] = typfun a -> typfun b -> fun f -> fun x1 -> case x1
+$ hazel_of_ocaml -both map.ml
+let map : forall a -> forall b -> (a -> b) -> [a] -> [b] = typfun a -> typfun b -> fun f -> fun x2 -> case x2
+  | [] => []
+  | x :: xs => f(x) :: map@<a>@<b>(f)(xs)
+end in let map = fun f -> fun x1 -> case x1
   | [] => []
   | x :: xs => f(x) :: map(f)(xs)
 end in ?

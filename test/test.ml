@@ -13,9 +13,15 @@ let ocaml_to_hazel ?(typecheck = false) s =
   let types =
     if typecheck then Some (Hazel_of_ocaml.Typecheck.typecheck s) else None
   in
-  let terms = List.map (Hazel_of_ocaml.of_structure_item ?types) ast in
+  let polyvars = ref [] in
+  Hazel_of_ocaml.collect_polyvars ?types ~polyvars ast;
   let terms =
-    List.fold_right (fun f exp -> f exp) terms Haz3lmenhir.AST.EmptyHole
+    List.fold_right
+      (fun item exp ->
+        match Hazel_of_ocaml.of_structure_item ?types ~polyvars item exp with
+        | Some f -> f
+        | None -> exp)
+      ast Haz3lmenhir.AST.EmptyHole
   in
   Hazel_of_ocaml.Ppast.exp Format.std_formatter terms
 
@@ -118,6 +124,22 @@ let[@tail_mod_cons] rec mapi i f = function
       | [] => []
       | [a1] => let r1 = f(i)(a1) in [r1]
       | a1 :: a2 :: l =>
-          let r1 = f(i)(a1) in let r2 = f(i + 1)(a2) in r1 :: r2 :: mapi(i + 2)(f)(l)
+          let r1 = f(i)(a1) in let r2 = f(i + 1)(a2) in r1 :: r2 :: mapi@<a>@<b>(i + 2)(f)(l)
     end in ?
     |}]
+
+let%expect_test "type list with disable" =
+  ocaml_to_hazel ~typecheck:true
+    {|
+  let rec length_aux len = function
+      [] -> len
+    | _::l -> length_aux (len + 1) l
+
+  let length l = length_aux 0 l
+  |};
+  [%expect
+    {|
+    let length_aux : forall a -> Int -> [a] -> Int = typfun a -> fun len -> fun x5 -> case x5
+      | [] => len
+      | _ :: l => length_aux@<a>(len + 1)(l)
+    end in let length : forall a -> [a] -> Int = typfun a -> fun l -> length_aux@<a>(0)(l) in ? |}]
