@@ -13,6 +13,7 @@ let rec of_core_type (c : core_type) : AST.typ =
   | Ptyp_constr ({ txt = Lident "string"; _ }, []) -> AST.StringType
   | Ptyp_constr ({ txt = Lident "float"; _ }, []) -> AST.FloatType
   | Ptyp_tuple cs -> AST.TupleType (List.map of_core_type cs)
+  | Ptyp_constr ({ txt = Lident typ; _ }, []) -> AST.TypVar typ
   | _ -> Fmt.invalid_arg "of_core_type: %a" Pprintast.core_type c
 
 let is_disabled (attrs : attributes) =

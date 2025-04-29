@@ -143,3 +143,27 @@ let%expect_test "type list with disable" =
       | [] => len
       | _ :: l => length_aux@<a>(len + 1)(l)
     end in let length : forall a -> [a] -> Int = typfun a -> fun l -> length_aux@<a>(0)(l) in ? |}]
+
+let%expect_test "types" =
+  ocaml_to_hazel ~typecheck:false
+    {|
+type expr =
+  | VarX
+  | VarY
+  | Sine of expr
+  | Cosine of expr
+  | Average of expr* expr
+  | Times of expr* expr
+  | Thresh of expr* expr* expr* expr;;
+|};
+  [%expect
+    {|
+    type expr =
+      + VarX
+      + VarY
+      + Sine(expr)
+      + Cosine(expr)
+      + Average(expr, expr)
+      + Times(expr, expr)
+      + Thresh(expr, expr, expr, expr)
+     in ? |}]
