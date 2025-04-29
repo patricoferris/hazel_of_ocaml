@@ -136,6 +136,8 @@ let rec of_expression ~polyvars (e : expression) : AST.exp =
         | AST.Var "**", [ x; y ] -> AST.BinExp (x, IntOp Power, y)
         | AST.Var "=", [ x; y ] -> AST.BinExp (x, IntOp Equals, y)
         | AST.Var "<>", [ x; y ] -> AST.BinExp (x, IntOp NotEquals, y)
+        | AST.Var "mod", [ x; y ] ->
+            AST.ApExp (AST.Var "int_mod", AST.TupleExp [ x; y ])
         | _ ->
             (* Trying our best with type application *)
             let func =
