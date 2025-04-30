@@ -20,11 +20,11 @@
  (synopsis "Hazel code from OCaml code")
  (description "A best-effort transpiler of OCaml code to Hazel code")
  (depends 
-   ocaml
+   (ocaml (= 5.2.0))
    dune
    ; Our deps
    (ppxlib (<= 0.35.0))
-   merlin-lib
+   (merlin-lib (= 5.2.1-502))
    ppx_expect
    (mdx :with-test)
    ; Hazel deps which are vendored
