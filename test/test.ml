@@ -54,14 +54,14 @@ let%expect_test "list.hd" =
     end in ?
     |}]
 
-let%expect_test "list.hd function" =
+let%expect_test "list.hd function + string concat" =
   ocaml_to_hazel
-    {|let hd = function | hd :: _ -> hd | [] -> invalid_arg "empty list" |};
+    {|let hd = function | hd :: _ -> hd | [] -> invalid_arg ("empty list" ^ "!") |};
   [%expect
     {|
     let hd = fun x1 -> case x1
       | hd :: _ => hd
-      | [] => invalid_arg("empty list")
+      | [] => invalid_arg("empty list" ++ "!")
     end in ?
     |}]
 
@@ -154,7 +154,13 @@ type expr =
   | Cosine of expr
   | Average of expr* expr
   | Times of expr* expr
-  | Thresh of expr* expr* expr* expr;;
+  | Thresh of expr* expr* expr* expr
+
+let cosine e = Cosine e 
+
+let is_cosine = function
+  | Cosine _ -> true
+  | _ -> false
 |};
   [%expect
     {|
@@ -166,4 +172,7 @@ type expr =
       + Average(expr, expr)
       + Times(expr, expr)
       + Thresh(expr, expr, expr, expr)
-     in ? |}]
+     in let cosine = fun e -> Cosine(e) in let is_cosine = fun x6 -> case x6
+      | Cosine(_) => true
+      | _ => false
+    end in ? |}]

@@ -87,6 +87,16 @@ let rec exp : AST.exp pp =
         | IntOp Power -> "**"
         | IntOp Equals -> "=="
         | IntOp NotEquals -> "!="
+        | FloatOp Plus -> "+."
+        | FloatOp Minus -> "-."
+        | FloatOp LessThan -> "<."
+        | FloatOp LessThanOrEqual -> "<=."
+        | FloatOp GreaterThan -> ">."
+        | FloatOp GreaterThanOrEqual -> ">."
+        | FloatOp Times -> "*."
+        | FloatOp Divide -> "/."
+        | FloatOp Equals -> "=."
+        | StringOp Concat -> "++"
         | _ -> "?"
       in
       Format.fprintf fmt "%a %s %a" exp x bin_op exp y

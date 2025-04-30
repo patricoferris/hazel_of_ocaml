@@ -67,7 +67,7 @@ let of_constant (c : constant) : AST.exp =
 
 let longident l =
   Longident.flatten_exn l.txt |> function
-  | [ x ] -> x
+  | [ "List"; x ] | [ x ] -> x
   | vs ->
       Fmt.failwith "Hazel doesn't have a module system: %s"
         (String.concat "." vs)
@@ -137,8 +137,21 @@ let rec of_expression ~polyvars (e : expression) : AST.exp =
         | AST.Var "**", [ x; y ] -> AST.BinExp (x, IntOp Power, y)
         | AST.Var "=", [ x; y ] -> AST.BinExp (x, IntOp Equals, y)
         | AST.Var "<>", [ x; y ] -> AST.BinExp (x, IntOp NotEquals, y)
+        | AST.Var "+.", [ x; y ] -> AST.BinExp (x, FloatOp Plus, y)
+        | AST.Var "-.", [ x; y ] -> AST.BinExp (x, FloatOp Minus, y)
+        (* Tricky: we don't have type information *)
+        | AST.Var "<=.", [ x; y ] -> AST.BinExp (x, FloatOp LessThanOrEqual, y)
+        | AST.Var "<.", [ x; y ] -> AST.BinExp (x, FloatOp LessThan, y)
+        | AST.Var ">.", [ x; y ] -> AST.BinExp (x, FloatOp GreaterThan, y)
+        | AST.Var ">=.", [ x; y ] ->
+            AST.BinExp (x, FloatOp GreaterThanOrEqual, y)
+        | AST.Var "*.", [ x; y ] -> AST.BinExp (x, FloatOp Times, y)
+        | AST.Var "/.", [ x; y ] -> AST.BinExp (x, FloatOp Divide, y)
+        | AST.Var "=.", [ x; y ] -> AST.BinExp (x, FloatOp Equals, y)
         | AST.Var "mod", [ x; y ] ->
             AST.ApExp (AST.Var "int_mod", AST.TupleExp [ x; y ])
+        (* Strings *)
+        | AST.Var "^", [ x; y ] -> AST.BinExp (x, StringOp Concat, y)
         | _ ->
             (* Trying our best with type application *)
             let func =
