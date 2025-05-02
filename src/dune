@@ -1,3 +1,3 @@
 (library
  (name hazel_of_ocaml)
- (libraries ppxlib merlin-lib.kernel merlin-lib.query_commands hazel.menhir))
+ (libraries ppxlib fmt merlin-lib.kernel merlin-lib.query_commands))

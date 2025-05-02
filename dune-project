@@ -23,20 +23,11 @@
    (ocaml (= 5.2.0))
    dune
    ; Our deps
+   fmt
    (ppxlib (<= 0.35.0))
    (merlin-lib (= 5.3-502))
    ppx_expect
    (mdx :with-test)
-   ; Hazel deps which are vendored
-   re
-   sexplib
-   unionFind
-   reason
-   menhir
-   ppx_let
-   ppx_deriving_qcheck
-   qcheck-alcotest
-   ppx_sexp_conv
  )
 )
 

@@ -11,19 +11,11 @@ bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "ocaml" {= "5.2.0"}
   "dune" {>= "3.16"}
+  "fmt"
   "ppxlib" {<= "0.35.0"}
   "merlin-lib" {= "5.3-502"}
   "ppx_expect"
   "mdx" {with-test}
-  "re"
-  "sexplib"
-  "unionFind"
-  "reason"
-  "menhir"
-  "ppx_let"
-  "ppx_deriving_qcheck"
-  "qcheck-alcotest"
-  "ppx_sexp_conv"
   "odoc" {with-doc}
 ]
 build: [
