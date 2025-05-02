@@ -1,5 +1,3 @@
-open Haz3lmenhir
-
 type 'a pp = Format.formatter -> 'a -> unit
 
 let hole fmt = Format.fprintf fmt "?"
@@ -22,7 +20,7 @@ and typ ?(parens = true) : AST.typ pp =
   | FloatType -> Format.pp_print_string fmt "Float"
   | TupleType cs ->
       Format.fprintf fmt
-        (if parens then "(%a)" else "%a")
+        (match cs with [ _ ] -> "%a" | _ -> "(%a)")
         (Format.pp_print_list ~pp_sep:comma typ)
         cs
   | SumTyp s ->

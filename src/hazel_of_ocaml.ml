@@ -1,5 +1,5 @@
 open Ppxlib
-open Haz3lmenhir
+module AST = AST
 module Ppast = Ppast
 module Typecheck = Typecheck
 
@@ -73,14 +73,14 @@ let longident l =
         (String.concat "." vs)
 
 let poly_vars v =
-  let open Ocaml_typing.Outcometree in
+  let open Merlin_sherlodoc.Type_parsed in
   let rec loop acc = function
-    | Otyp_var (_, v) ->
+    | Tyvar v ->
         if not (List.exists (String.equal v) acc) then v :: acc else acc
-    | Otyp_arrow (_, a, b) ->
+    | Arrow (a, b) ->
         let v = loop acc a in
         loop v b
-    | Otyp_constr (_, lst) -> List.fold_left (fun acc v -> loop acc v) acc lst
+    | Tycon (_, lst) -> List.fold_left (fun acc v -> loop acc v) acc lst
     | _ -> []
   in
   loop [] v
@@ -91,16 +91,18 @@ let fresh_var =
     i := !i + 1;
     "x" ^ string_of_int !i
 
-let is_function s (p : AST.pat) =
-  match p with AST.VarPat s' -> String.equal s s' | _ -> false
+let ( let* ) v f = Option.bind v f
 
-let find_polyvars (func : string) polyvars =
-  List.find_map
-    (fun (pat, v) -> if is_function func pat then Some v else None)
-    polyvars
+let merlin_position (loc : Ppxlib.location) =
+  `Logical
+    (loc.loc_start.pos_lnum, loc.loc_start.pos_cnum - loc.loc_start.pos_bol + 1)
 
-let rec of_expression ~polyvars (e : expression) : AST.exp =
-  let of_expression = of_expression ~polyvars in
+let pp_pos ppf = function
+  | `Logical (l, c) -> Fmt.pf ppf "%i:%i" l c
+  | `Offset n -> Fmt.int ppf n
+  | _ -> ()
+
+let rec of_expression (e : expression) : AST.exp =
   let f =
     match e.pexp_desc with
     | Pexp_constant constant -> of_constant constant
@@ -113,18 +115,17 @@ let rec of_expression ~polyvars (e : expression) : AST.exp =
         in
         AST.Fun (of_pattern pat, of_expression body, label)
     | Pexp_function cases ->
-        let hazel_cases = of_cases ~polyvars cases in
+        let hazel_cases = of_cases cases in
         let var = fresh_var () in
         AST.Fun (AST.VarPat var, AST.CaseExp (AST.Var var, hazel_cases), None)
     | Pexp_ident l -> AST.Var (longident l)
     | Pexp_ifthenelse (e1, e2, Some e3) ->
         AST.If (of_expression e1, of_expression e2, of_expression e3)
-    | Pexp_match (exp, cases) ->
-        AST.CaseExp (of_expression exp, of_cases ~polyvars cases)
+    | Pexp_match (exp, cases) -> AST.CaseExp (of_expression exp, of_cases cases)
     | Pexp_apply (e, args) -> (
-        let func = of_expression e in
-        let args = List.map snd args |> List.map of_expression in
-        match (func, args) with
+        let hfunc = of_expression e in
+        let hargs = List.map snd args |> List.map of_expression in
+        match (hfunc, hargs) with
         | AST.Var "+", [ x; y ] -> AST.BinExp (x, IntOp Plus, y)
         | AST.Var "-", [ x; y ] -> AST.BinExp (x, IntOp Minus, y)
         (* Tricky: we don't have type information *)
@@ -153,21 +154,59 @@ let rec of_expression ~polyvars (e : expression) : AST.exp =
         (* Strings *)
         | AST.Var "^", [ x; y ] -> AST.BinExp (x, StringOp Concat, y)
         | _ ->
-            (* Trying our best with type application *)
-            let func =
-              match func with
-              | AST.Var funcs -> (
-                  match find_polyvars funcs !polyvars with
-                  | None | Some [] -> func
-                  | Some polyvars ->
-                      List.fold_right
-                        (fun v acc -> AST.TypAp (acc, AST.TypVar v))
-                        polyvars func)
-              | _ -> func
+            (* Trying our best with type application. We use Merlin to
+               lookup the type of the arguments being supplied to this
+               particular function application and reconstruct the unification
+               of OCaml's type variables. *)
+            let function_types =
+              Typecheck.type_of_position ~label:"type application"
+                (merlin_position e.pexp_loc)
             in
-            List.fold_right
-              (fun acc f -> AST.ApExp (f, acc))
-              (List.rev args) func)
+            (* Fmt.pr "Function types @%a %a : %a\n" pp_pos (merlin_position e.pexp_loc) Pprintast.expression e Fmt.(list ~sep:Fmt.comma Ppast.typ) (List.map Typecheck.type_parsed_to_type function_types);  *)
+            let types =
+              match function_types with
+              | ft :: rt :: _ -> Some (ft, rt)
+              | [ t ] ->
+                  Fmt.failwith "Only one type %a" (Ppast.typ ~parens:false)
+                    (Typecheck.type_parsed_to_type t)
+              | [] -> None
+            in
+            (* Fmt.pr "Function Types: %a\n%!" Fmt.(list ~sep:Fmt.comma string) *)
+            (*   (List.map (fun v -> Merlin_sherlodoc.Type_expr.normalize_type_parameters v |> Merlin_sherlodoc.Type_expr.to_string) function_types); *)
+            let poly_variables, unified_variables =
+              match types with
+              | None -> ([], [])
+              | Some (ft, rt) ->
+                  (* Fmt.pr "Getting(%i): %a\n%!" e.pexp_loc.loc_start.pos_cnum Pprintast.expression e; *)
+                  let unified_variables = Typecheck.unified_vars ft rt in
+                  (poly_vars ft, unified_variables)
+            in
+            let needs_type_application =
+              (* TODO: Only let-bound things need this, not higher-order function arguments. *)
+              poly_variables <> []
+              && not
+                   (match hfunc with
+                   | AST.Var "raise" | AST.Var "invalid_arg" -> true
+                   | _ -> false)
+            in
+            if not needs_type_application then
+              List.fold_right
+                (fun acc f -> AST.ApExp (f, acc))
+                (List.rev hargs) hfunc
+            else
+              let func =
+                match hfunc with
+                | AST.Var _function ->
+                    List.fold_left
+                      (fun acc (_, typ) ->
+                        let typ = Typecheck.type_parsed_to_type typ in
+                        AST.TypAp (acc, typ))
+                      hfunc unified_variables
+                | _ -> hfunc
+              in
+              List.fold_right
+                (fun acc f -> AST.ApExp (f, acc))
+                (List.rev hargs) func)
     | Pexp_construct (l, None) ->
         let construct_name = longident l in
         AST.Constructor (construct_name, AST.UnknownType EmptyHole)
@@ -177,7 +216,7 @@ let rec of_expression ~polyvars (e : expression) : AST.exp =
         let f = AST.Constructor (construct_name, AST.UnknownType EmptyHole) in
         AST.ApExp (f, arg)
     | Pexp_let (_rec, bindings, body) ->
-        of_value_bindings ~polyvars bindings (of_expression body)
+        of_value_bindings bindings (of_expression body)
     | Pexp_tuple exps -> AST.TupleExp (List.map of_expression exps)
     | _ -> EmptyHole
   in
@@ -202,43 +241,38 @@ and of_pattern (p : pattern) : AST.pat =
   | Ppat_tuple ts -> AST.TuplePat (List.map of_pattern ts)
   | _ -> EmptyHolePat
 
-and of_cases ~polyvars (cs : case list) : (AST.pat * AST.exp) list =
-  List.map
-    (fun (c : case) -> (of_pattern c.pc_lhs, of_expression ~polyvars c.pc_rhs))
-    cs
+and of_cases (cs : case list) : (AST.pat * AST.exp) list =
+  List.map (fun (c : case) -> (of_pattern c.pc_lhs, of_expression c.pc_rhs)) cs
 
-and of_value_bindings ?types ~polyvars bindings acc =
+and of_value_bindings ?(typed = false) bindings acc =
   let binding (v : value_binding) =
     if is_disabled v.pvb_attributes then None
     else
       Some
         (fun exp ->
           let type' =
-            match types with
-            | None -> None
-            | Some types -> (
+            match typed with
+            | false -> None
+            | true -> (
                 try
                   match v.pvb_pat.ppat_desc with
-                  | Ppat_var { txt; _ } -> (
-                      let t =
-                        Typecheck.find_function_type
-                          (Ocaml_typing.Ident.create_local txt)
-                          types
+                  | Ppat_var _ -> (
+                      let typs =
+                        Typecheck.type_of_position
+                          ~label:(Fmt.str "%a" Pprintast.binding v)
+                          (merlin_position v.pvb_pat.ppat_loc)
                       in
-                      Ocaml_typing.Printtyp.reset ();
-                      let outcome =
-                        Ocaml_typing.Printtyp.tree_of_type_scheme t
-                      in
-                      let t' = of_out_type outcome in
-                      match find_polyvars txt !polyvars with
-                      | None | Some [] -> Some ([], t')
-                      | Some vars ->
+                      let typ = List.hd typs in
+                      let hazel_typ = Typecheck.type_parsed_to_type typ in
+                      match poly_vars typ with
+                      | [] -> Some ([], hazel_typ)
+                      | vars ->
                           Some
                             ( vars,
                               List.fold_left
                                 (fun t var ->
                                   AST.ForallType (AST.VarTPat var, t))
-                                t' vars ))
+                                hazel_typ vars ))
                   | _ -> None
                 with Not_found -> None (* | Invalid_argument v -> None *))
           in
@@ -248,12 +282,16 @@ and of_value_bindings ?types ~polyvars bindings acc =
                 AST.CastPat (of_pattern v.pvb_pat, ty, UnknownType Internal)
             | None -> of_pattern v.pvb_pat
           in
-          let e = of_expression ~polyvars v.pvb_expr in
+          let e = of_expression v.pvb_expr in
           match (pattern, e) with
-          | AST.CastPat (AST.VarPat p, _, _), AST.Fun _ -> (
-              match find_polyvars p !polyvars with
-              | None | Some [] -> AST.Let (pattern, e, exp)
-              | Some vars ->
+          | AST.CastPat (AST.VarPat _, _, _), AST.Fun _ -> (
+              let typ =
+                Typecheck.type_of_position ~label:"pattern"
+                  (merlin_position v.pvb_pat.ppat_loc)
+              in
+              match poly_vars @@ List.hd typ with
+              | [] -> AST.Let (pattern, e, exp)
+              | vars ->
                   let e =
                     List.fold_left
                       (fun acc p -> AST.TypFun (AST.VarTPat p, acc))
@@ -291,47 +329,12 @@ and of_out_type (v : Ocaml_typing.Outcometree.out_type) : AST.typ =
       | f -> invalid_arg ("Hazel doesn't have type constructors for " ^ f))
   | _ -> AST.UnknownType EmptyHole
 
-and collect_polyvars types polyvars bs =
-  let bindings (v : value_binding) =
-    match types with
-    | None -> ()
-    | Some types -> (
-        match v.pvb_pat.ppat_desc with
-        | Ppat_var { txt; _ } -> (
-            let t =
-              Typecheck.find_function_type
-                (Ocaml_typing.Ident.create_local txt)
-                types
-            in
-            Ocaml_typing.Printtyp.reset ();
-            let outcome = Ocaml_typing.Printtyp.tree_of_type_scheme t in
-            let vars = poly_vars outcome in
-            match vars with
-            | [] -> ()
-            | vars -> polyvars := (of_pattern v.pvb_pat, vars) :: !polyvars)
-        | _ -> ())
-  in
-  List.iter bindings bs
-
-let of_structure_item ?types ~polyvars (str : structure_item) exp =
+let of_structure_item ?typed (str : structure_item) exp =
   match str.pstr_desc with
   | Pstr_type (_, tds) ->
       let terms = List.filter_map of_type_declaration tds in
       Some (List.fold_left (fun e f -> f e) exp terms)
-  | Pstr_value (_, bindings) ->
-      (* let pp_binding fmt (v : value_binding) = *)
-      (*   Fmt.pf fmt "%a %a\n%!" Pprintast.pattern v.pvb_pat Pprintast.expression v.pvb_expr *)
-      (* in *)
-      (* Fmt.pr "Dealing with \n %a \n%!" Fmt.(list pp_binding) bindings; *)
-      Some (of_value_bindings ?types bindings ~polyvars exp)
+  | Pstr_value (_, bindings) -> Some (of_value_bindings ?typed bindings exp)
   | _ ->
       Fmt.epr "Unsupported structure item:\n%a" Pprintast.structure_item str;
       None
-
-let collect_polyvars ?types ~polyvars (str : structure) =
-  let apply str =
-    match str.pstr_desc with
-    | Pstr_value (_, bindings) -> collect_polyvars types polyvars bindings
-    | _ -> ()
-  in
-  List.iter apply str

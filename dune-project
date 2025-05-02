@@ -24,7 +24,7 @@
    dune
    ; Our deps
    (ppxlib (<= 0.35.0))
-   (merlin-lib (= 5.2.1-502))
+   (merlin-lib (= 5.3-502))
    ppx_expect
    (mdx :with-test)
    ; Hazel deps which are vendored
