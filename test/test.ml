@@ -60,7 +60,8 @@ let%expect_test "list.hd" =
     let hd = fun v -> case v
       | hd :: _ => hd
       | [] => invalid_arg("empty list")
-    end in ?
+    end in
+    ?
     |}]
 
 let%expect_test "list.hd function + string concat" =
@@ -71,7 +72,8 @@ let%expect_test "list.hd function + string concat" =
     let hd = fun x1 -> case x1
       | hd :: _ => hd
       | [] => invalid_arg("empty list" ++ "!")
-    end in ?
+    end in
+    ?
     |}]
 
 let%expect_test "sum definitions" =
@@ -82,7 +84,8 @@ let%expect_test "sum definitions" =
       + A(Int)
       + B(String)
       + C((Int, String))
-     in ?
+     in
+    ?
     |}]
 
 let%expect_test "sum functions" =
@@ -96,11 +99,13 @@ let%expect_test "sum functions" =
       + A(Int)
       + B(String)
       + C((Int, String))
-     in let f : t -> Int = fun x2 -> case x2
+     in
+    let f : t -> Int = fun x2 -> case x2
       | A(1) => 0
       | A(i) => i
       | B => 10
-    end in ?
+    end in
+    ?
     |}]
 
 let%expect_test "lists" =
@@ -111,7 +116,8 @@ let%expect_test "lists" =
     let hd : forall a -> [a] -> a = typfun a -> fun x3 -> case x3
       | x :: _ => x
       | [] => invalid_arg("Empty list")
-    end in ?
+    end in
+    ?
     |}]
 
 let%expect_test "another list" =
@@ -134,7 +140,8 @@ let[@tail_mod_cons] rec mapi i f = function
       | [a1] => let r1 = f(i)(a1) in [r1]
       | a1 :: a2 :: l =>
           let r1 = f(i)(a1) in let r2 = f(i + 1)(a2) in r1 :: r2 :: mapi@<a>@<b>(i + 2)(f)(l)
-    end in ?
+    end in
+    ?
     |}]
 
 let%expect_test "type list with disable" =
@@ -153,7 +160,9 @@ let%expect_test "type list with disable" =
     let length_aux : forall a -> Int -> [a] -> Int = typfun a -> fun len -> fun x5 -> case x5
       | [] => len
       | _ :: l => length_aux@<a>(len + 1)(l)
-    end in let length : forall a -> [a] -> Int = typfun a -> fun l -> length_aux@<a>(0)(l) in let len : Int = length@<Int>(1 :: 2 :: [3]) in ?
+    end in
+    let length : forall a -> [a] -> Int = typfun a -> fun l -> length_aux@<a>(0)(l) in
+    let len : Int = length@<Int>(1 :: 2 :: [3]) in ?
     |}]
 
 let%expect_test "types" =
@@ -184,10 +193,12 @@ let is_cosine = function
       + Average((expr, expr))
       + Times((expr, expr))
       + Thresh((expr, expr, expr, expr))
-     in let cosine = fun e -> Cosine(e) in let is_cosine = fun x6 -> case x6
+     in
+    let cosine = fun e -> Cosine(e) in let is_cosine = fun x6 -> case x6
       | Cosine(_) => true
       | _ => false
-    end in ?
+    end in
+    ?
     |}]
 
 (* Unification-esque *)

@@ -51,10 +51,12 @@ let rec exp : AST.exp pp =
   | ListExp es ->
       Format.fprintf fmt "[%a]" Format.(pp_print_list ~pp_sep:comma exp) es
   | TyAlias (p, t, e) ->
-      Format.fprintf fmt "type %a = %a in %a" tpat p (typ ~parens:true) t exp e
+      Format.fprintf fmt "@[<2>@[<2>type %a = %a@] in@;<1 -2>@]%a" tpat p
+        (typ ~parens:true) t exp e
   | EmptyHole -> hole fmt
   | Let (p, e1, e2) ->
-      Format.fprintf fmt "let %a = %a in %a" (pat ~parens:true) p exp e1 exp e2
+      Format.fprintf fmt "@[<2>@[<2>let %a = %a@] in@;<1 -2>@]%a"
+        (pat ~parens:true) p exp e1 exp e2
   | Fun (p, e, _) ->
       Format.fprintf fmt "fun %a -> %a" (pat ~parens:true) p exp e
   | TypFun (VarTPat v, e) -> Format.fprintf fmt "typfun %s -> %a" v exp e
